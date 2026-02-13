@@ -1,8 +1,8 @@
 import streamlit as st
 import pickle
 import numpy as np
-from keras.models import load_model
-from keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # ------------------------------
 # Load saved files
@@ -21,46 +21,67 @@ def load_resources():
 
 model, tokenizer, max_len = load_resources()
 
+# Create reverse word index (faster lookup)
+index_word = {index: word for word, index in tokenizer.word_index.items()}
+
 # ------------------------------
-# Prediction function
+# Multi-word prediction function
 # ------------------------------
 
 
-def predict_next_word(text):
-    sequence = tokenizer.texts_to_sequences([text])[0]
-    sequence = pad_sequences([sequence], maxlen=max_len-1, padding='pre')
+def predict_next_words(text, n_words):
+    current_text = text
 
-    preds = model.predict(sequence, verbose=0)
-    predicted_index = np.argmax(preds)
+    for _ in range(n_words):
+        sequence = tokenizer.texts_to_sequences([current_text])[0]
+        sequence = pad_sequences([sequence], maxlen=max_len-1, padding='pre')
 
-    for word, index in tokenizer.word_index.items():
-        if index == predicted_index:
-            return word
-    return ""
+        preds = model.predict(sequence, verbose=0)
+        predicted_index = np.argmax(preds)
+
+        next_word = index_word.get(predicted_index, "")
+
+        if next_word == "":
+            break
+
+        current_text += " " + next_word
+
+    return current_text
 
 
 # ------------------------------
 # Streamlit UI
 # ------------------------------
+
 st.set_page_config(page_title="Next Word Prediction", layout="centered")
 
-st.title("🧠 Next Word Prediction (LSTM)")
-st.write("Enter a sentence and the model will predict the **next word**.")
+st.title("🧠 LSTM Text Completion Engine")
+st.write("Enter a sentence and choose how many words to generate.")
 
 with st.form(key="prediction_form", clear_on_submit=False):
     user_input = st.text_input(
-        "✍️ Enter text:", placeholder="Type a sentence here...")
-    submit_button = st.form_submit_button("Predict Next Word")
+        "✍️ Enter text:", placeholder="Type a sentence here..."
+    )
+
+    num_words = st.slider(
+        "🔢 Number of words to generate:",
+        min_value=1,
+        max_value=20,
+        value=5
+    )
+
+    submit_button = st.form_submit_button("Generate")
 
 if submit_button:
     if user_input.strip() == "":
         st.warning("Please enter some text.")
     else:
-        next_word = predict_next_word(user_input)
-        st.success(f"**Predicted Next Word:** {next_word}")
+        generated_text = predict_next_words(user_input, num_words)
+        st.success(f"**Generated Text:** {generated_text}")
 
 # ------------------------------
 # Footer
 # ------------------------------
+
 st.markdown("---")
-st.caption("LSTM-based Next Word Prediction using Streamlit")
+st.caption("LSTM-based Text Completion using Streamlit")
